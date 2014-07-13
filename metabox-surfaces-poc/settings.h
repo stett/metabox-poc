@@ -1,4 +1,4 @@
-#define BOX_RENDER_SIZE 230 // pixels
+#define BOX_RENDER_SIZE 400 // pixels
 #define BOX_PHYSICAL_SIZE 7 // "meters"
 #define BOX_SLOTS 7 // slots per box-side
 #define BOX_METERS_PER_SLOT ((float)BOX_PHYSICAL_SIZE/(float)BOX_SLOTS)

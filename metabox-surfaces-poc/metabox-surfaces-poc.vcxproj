@@ -81,7 +81,8 @@
     <ClInclude Include="game.h" />
     <ClInclude Include="Player.h" />
     <ClInclude Include="settings.h" />
-    <ClInclude Include="vec3f.h" />
+    <ClInclude Include="vec2f.h" />
+    <ClInclude Include="View.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="open_meta_door.frag" />

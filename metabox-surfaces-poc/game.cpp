@@ -2,7 +2,8 @@
 #include "settings.h"
 #include "Box.h"
 #include "Player.h"
-#include "vec3f.h"
+#include "View.h"
+#include "vec2f.h"
 #include <SFML/OpenGL.hpp>
 #include <SFML/Graphics.hpp>
 #include <SFML/System/Clock.hpp>
@@ -22,6 +23,7 @@ namespace game {
 	list<shared_ptr<sf::RenderTexture>> box_textures;
 	list<shared_ptr<sf::RenderTexture>> unused_box_textures;
 	unique_ptr<sf::RenderWindow> window;
+	View view;
 	sf::Font font;
 	sf::Texture box_bg;
 	sf::Texture grid;
@@ -30,15 +32,15 @@ namespace game {
 	sf::Shader open_meta_door_shader;
 	int next_box_id;
 	float fps;
-
-	/* TEMP */
-	float t_shader;
 	
 	// Private game functions
 	void step(float dt);
 	void draw();
+	void get_view_transforms(sf::RenderStates& states);
+	void render_game();
+	void render_editor();
 	void render_box(shared_ptr<Box> box);
-	void get_box_shader(shared_ptr<Box> box, sf::RenderStates& render_states);
+	void get_box_shader(shared_ptr<Box> box, sf::RenderStates& states);
 	shared_ptr<Box> add_box(shared_ptr<Box> parent = 0, int sx = 0, int sy = 0);
 	void add_block(shared_ptr<Box> parent, int sx, int sy);
 	void assign_box_texture(shared_ptr<Box> box);
@@ -48,6 +50,7 @@ namespace game {
 	void generate_world_edges(shared_ptr<Box> box);
 	void set_player_container(shared_ptr<Box> box, b2Vec2 position);
 	void set_player_container(shared_ptr<Box> box, b2Vec2 position, b2Vec2 velocity);
+	void center_view_on_slot(int sx, int sy, bool target = true);
 
 	//
 	Player player;
@@ -55,6 +58,9 @@ namespace game {
 
 void game::setup() {
 	next_box_id = 0;
+
+	// TEMP
+	//center_view_on_slot(7, 7, false);
 
 	// Add a bunch of boxes
 	auto a = add_box();
@@ -87,7 +93,7 @@ void game::setup() {
 	set_player_container(b, b2Vec2(4, 3));
 
 	// Create the main window
-	window = unique_ptr<sf::RenderWindow>(new sf::RenderWindow(sf::VideoMode(800, 600), "Metabox Surfaces - Proof Of Concept", sf::Style::Default));
+	window = unique_ptr<sf::RenderWindow>(new sf::RenderWindow(sf::VideoMode(BOX_RENDER_SIZE, BOX_RENDER_SIZE), "Metabox Surfaces - Proof Of Concept", sf::Style::Default));
 	window->setActive(true);
 
 	// Create a graphical text to display
@@ -111,10 +117,6 @@ void game::run() {
 	sf::Time t0 = clock.getElapsedTime();
 	sf::Time t1;
 
-	/* TEMP */
-	float mt_shader = .5;
-	t_shader = 0;
-
 	while (running) {
 		
 		t1 = clock.getElapsedTime();
@@ -125,17 +127,6 @@ void game::run() {
 		while (dt_accum >= dt_min) {
 			dt_accum -= dt_min;
 			step(dt_min);
-
-			/* TEMP */
-			t_shader += mt_shader * dt_min;
-			if (t_shader > 1) {
-				t_shader = 1;
-				mt_shader *= -1;
-			}
-			else if (t_shader < 0) {
-				t_shader = 0;
-				mt_shader *= -1;
-			}
 		}
 		
 		draw();
@@ -339,6 +330,19 @@ void game::step(float dt) {
 		}
 	}
 
+	// Set view target parameters
+	for (auto door : player.container->doors) {
+		if (door && door->open) {
+			view.tscale = .5;
+			break;
+		}
+		view.tscale = 1;
+	}
+
+	// Update the view active parameters
+	view.x = view.x + (view.tx - view.x) * 3 * dt;
+	view.y = view.y + (view.ty - view.y) * 3 * dt;
+	view.scale = view.scale + (view.tscale - view.scale) * 4 * dt;
 	
 	// Stop running when the window is closed
 	running = window->isOpen();
@@ -346,26 +350,57 @@ void game::step(float dt) {
 
 void game::draw() {
 
-	/// TEMP ///
-	/*
-	sf::Sprite sprite(grid);
-	sprite.setScale(sf::Vector2f(1,1));
-	sprite.setPosition(10, 10);
-	open_meta_door_shader.setParameter("t", t_shader);
-	//open_meta_door_shader.setParameter("face", BoxFace::Right);
-	//open_meta_door_shader.setParameter("face_pos", 1);
-	window->draw(sprite, sf::RenderStates(&open_meta_door_shader));
-	*/
-	/// END TEMP ///
+	// Clear screen
+	window->clear(sf::Color(100, 100, 100));
 
+	//
+	//render_editor();
+	render_game();
+
+	// Draw the FPS
+	sf::Text text(to_string((int)fps), font, 12);
+	text.setPosition(sf::Vector2f(2, 2));
+	text.setColor(sf::Color(255, 0, 0, 255));
+	window->draw(text);
+
+
+	// Update the window
+	window->display();
+}
+
+void game::get_view_transforms(sf::RenderStates& states) {
+	states.transform.translate(sf::Vector2f(window->getSize().x * .5f, window->getSize().x * .5f))
+					.scale(sf::Vector2f(view.scale, view.scale))
+					.translate(sf::Vector2f(view.x, view.y))
+					.translate(-sf::Vector2f(window->getSize().x * .5f, window->getSize().x * .5f));
+}
+
+void game::render_game() {
+
+	// Find the active box
+	auto active_box = player.container;
+
+	// Render the active box (& its visible children), & get its sprite
+	render_box(active_box);
+	sf::Sprite sprite(active_box->texture->getTexture());
+	sf::RenderStates states;
+
+	// Apply view transformations
+	get_view_transforms(states);
+
+	// Apply the door shader
+	get_box_shader(active_box, states);
+
+	// Draw the active box
+	window->draw(sprite, states);
+}
+
+void game::render_editor() {
 
 	// Render the boxes to their textures
 	render_box(root_box);
 
-	// Clear screen
-	window->clear(sf::Color(100, 100, 100));
-
-	// Render all the box textures & calculate thier positions
+	// Draw all the box textures & calculate thier positions
 	sf::Vector2i ipos(0, 0);
 	map<int, sf::Vector2f> box_positions;
 	int iw = 3;
@@ -375,7 +410,7 @@ void game::draw() {
 
 		// Convert the rendered box texture to a sprite and draw it to the screen
 		sf::Sprite sprite(box->texture->getTexture());
-		sf::Vector2f pos = sf::Vector2f(pad + ipos.x * (BOX_RENDER_SIZE + pad), pad + ipos.y * (BOX_RENDER_SIZE + pad));
+		sf::Vector2f pos(pad + ipos.x * (BOX_RENDER_SIZE + pad), pad + ipos.y * (BOX_RENDER_SIZE + pad));
 		box_positions[box->id] = pos;
 		sprite.setPosition(pos);
 		sf::RenderStates states;
@@ -403,12 +438,12 @@ void game::draw() {
 			transform.translate(box_position);
 			sf::Vertex h_line[2];
 			sf::Vertex v_line[2];
-			v_line[0].position.x = h_line[0].position.y = 
-			v_line[1].position.x = h_line[1].position.y = i * (float)BOX_RENDER_SIZE / (float)BOX_PHYSICAL_SIZE;
+			v_line[0].position.x = h_line[0].position.y =
+				v_line[1].position.x = h_line[1].position.y = i * (float)BOX_RENDER_SIZE / (float)BOX_PHYSICAL_SIZE;
 			v_line[0].position.y = h_line[0].position.x = 0;
 			v_line[1].position.y = h_line[1].position.x = BOX_RENDER_SIZE;
 			h_line[0].color = h_line[1].color =
-			v_line[0].color = v_line[1].color = sf::Color(255, 255, 255, 30);
+				v_line[0].color = v_line[1].color = sf::Color(255, 255, 255, 30);
 			window->draw(h_line, 2, sf::PrimitiveType::Lines, sf::RenderStates(transform));
 			window->draw(v_line, 2, sf::PrimitiveType::Lines, sf::RenderStates(transform));
 		}
@@ -421,8 +456,8 @@ void game::draw() {
 			auto ang = body->GetAngle();
 			sf::Transform transform;
 			transform.translate(box_position)
-					 .translate(sf::Vector2f(pos.x * PIXELS_PER_METER, pos.y * PIXELS_PER_METER))
-				     .rotate(ang * 180.f / 3.14159f);
+				.translate(sf::Vector2f(pos.x * PIXELS_PER_METER, pos.y * PIXELS_PER_METER))
+				.rotate(ang * 180.f / 3.14159f);
 
 			// Draw the fixtures
 			for (b2Fixture* fixture = body->GetFixtureList(); fixture; fixture = fixture->GetNext()) {
@@ -483,7 +518,8 @@ void game::draw() {
 				if (box->doors[i]->open) {
 					rect.setOutlineColor(sf::Color::Blue);
 					rect.setFillColor(sf::Color(0, 0, 255, 50));
-				} else {
+				}
+				else {
 					rect.setOutlineColor(sf::Color::Red);
 					rect.setFillColor(sf::Color(255, 0, 0, 50));
 				}
@@ -518,7 +554,7 @@ void game::draw() {
 		if (box->parent) {
 			sf::Vertex line[2];
 			auto body_pos = box->body->GetPosition();
-			line[0].position = box_position;box->parent->body->GetPosition();
+			line[0].position = box_position; box->parent->body->GetPosition();
 			line[1].position = box_positions[box->parent->id] + sf::Vector2f(body_pos.x * PIXELS_PER_METER, body_pos.y * PIXELS_PER_METER);// +half;
 			window->draw(line, 2, sf::PrimitiveType::Lines);
 		}
@@ -529,16 +565,6 @@ void game::draw() {
 		text.setColor(sf::Color(255, 255, 255, 255));
 		window->draw(text);
 	}
-
-	// Draw the FPS
-	sf::Text text(to_string((int)fps), font, 12);
-	text.setPosition(sf::Vector2f(2, 2));
-	text.setColor(sf::Color(255, 0, 0, 255));
-	window->draw(text);
-
-
-	// Update the window
-	window->display();
 }
 
 void game::render_box(shared_ptr<Box> box) {
@@ -887,6 +913,32 @@ void game::set_player_container(shared_ptr<Box> box, b2Vec2 position, b2Vec2 vel
 	filter.maskBits = B2_CAT_MAIN;
 	fixture->SetFilterData(filter);
 
+	// Set the view scale based on whether we are pushing or popping
+	if (player.container) {
+
+		// Popping
+		if (player.container->parent == box) {
+			view.scale = 2;
+			center_view_on_slot(player.container->sx, player.container->sy, false);
+
+		// Pushing
+		} else if (box->parent == player.container) {
+			view.scale = 1.f / (float)BOX_SLOTS;
+		}
+	}
+
 	// Set the player container
 	player.container = box;
+}
+
+void game::center_view_on_slot(int sx, int sy, bool target) {
+	int x = (BOX_SLOTS * .5f - sx) * PIXELS_PER_METER * BOX_METERS_PER_SLOT;
+	int y = (BOX_SLOTS * .5f - sy) * PIXELS_PER_METER * BOX_METERS_PER_SLOT;
+	if (target) {
+		view.tx = x;
+		view.ty = y;
+	} else {
+		view.x = x;
+		view.y = y;
+	}
 }
