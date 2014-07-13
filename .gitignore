@@ -1,0 +1,12 @@
+Debug/*
+Release/*
+*.sdf
+*.suo
+*.opensdf
+*.vcxproj.user
+*.obj
+*.log
+*.tlog
+*.idb
+*.pdb
+*.lastbuildstate
