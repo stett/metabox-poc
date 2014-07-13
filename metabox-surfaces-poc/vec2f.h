@@ -20,6 +20,11 @@ struct vec2f {
 		return sqrt(x * x + y * y);
 	}
 
+	// Conversions
+	sf::Vector2f toVector2f() {
+		return sf::Vector2f(x, y);
+	}
+
 	// Overloaded operators
 	vec2f operator -(vec2f &rhs) {
 		return vec2f(x - rhs.x, y - rhs.y);

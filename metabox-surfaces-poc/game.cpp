@@ -32,6 +32,9 @@ namespace game {
 	sf::Shader open_meta_door_shader;
 	int next_box_id;
 	float fps;
+	Player player;
+	shared_ptr<BoxDoor> nearest_door;
+	BoxFace nearest_door_face;
 	
 	// Private game functions
 	void step(float dt);
@@ -51,9 +54,6 @@ namespace game {
 	void set_player_container(shared_ptr<Box> box, b2Vec2 position);
 	void set_player_container(shared_ptr<Box> box, b2Vec2 position, b2Vec2 velocity);
 	void center_view_on_slot(int sx, int sy, bool target = true);
-
-	//
-	Player player;
 };
 
 void game::setup() {
@@ -88,6 +88,16 @@ void game::setup() {
 		add_block(a, i, 4);
 		add_block(a, i, 3);
 	}
+
+	add_block(b, 0, 1);
+	add_block(b, 1, 1);
+	add_block(b, 0, 2);
+	add_block(b, 1, 2);
+	add_block(b, 2, 2);
+	add_block(b, 3, 2);
+
+	add_block(d, 6, 5);
+	add_block(d, 6, 6);
 
 	// Add the player to the first box and give it a body
 	set_player_container(b, b2Vec2(4, 3));
@@ -206,8 +216,11 @@ void game::step(float dt) {
 	}
 
 	//
-	shared_ptr<BoxDoor> nearest_door = 0;
-	BoxFace nearest_door_face;
+	if (nearest_door && nearest_door->open)
+		open_box_door(nearest_door->parent, nearest_door_face, false);
+
+	//
+	nearest_door = 0;
 	float max_door_dist = 2;
 	float nearest_door_dist = max_door_dist;
 
@@ -223,12 +236,15 @@ void game::step(float dt) {
 			float dist = diff.length();
 
 			// If player is too far away, close door
+			/*
 			if (door->open) {
 				if (dist > max_door_dist)
 					open_box_door(player.container, (BoxFace)face, false);
-
+			}
+			*/
+			
 			// If this is the closest door thus far, save it
-			} else if (dist < nearest_door_dist) {
+			if (dist < nearest_door_dist) {
 				nearest_door = door;
 				nearest_door_dist = dist;
 				nearest_door_face = (BoxFace)face;
@@ -251,10 +267,12 @@ void game::step(float dt) {
 				float dist = diff.length();
 
 				// If player is too far away, close door
+				/*
 				if (door->open) {
 					if (dist > max_door_dist)
 						open_box_door(box, (BoxFace)face, false);
-				} 
+				}
+				*/
 				
 				// If this is the closest door thus far, save it
 				if (dist < nearest_door_dist) {
@@ -379,9 +397,26 @@ void game::render_game() {
 
 	// Find the active box
 	auto active_box = player.container;
+	auto active_parent = active_box->parent;
 
-	// Render the active box (& its visible children), & get its sprite
-	render_box(active_box);
+	// If the active box has a parent, 
+	if (active_parent) {
+		render_box(active_parent);
+		sf::Sprite sprite(active_parent->texture->getTexture());
+		sf::RenderStates states;
+
+		// Apply view transformations
+		get_view_transforms(states);
+
+		vec2f pos = vec2f(active_box->sx, active_box->sy) * PIXELS_PER_METER * BOX_METERS_PER_SLOT;
+		states.transform.scale(sf::Vector2f(BOX_SLOTS, BOX_SLOTS))
+			  .translate(-pos.toVector2f());
+
+		window->draw(sprite, states);
+	}
+
+	// Render the active box (& its visible children) and get its sprite
+	if (!active_parent) render_box(active_box);
 	sf::Sprite sprite(active_box->texture->getTexture());
 	sf::RenderStates states;
 
@@ -803,8 +838,8 @@ void game::generate_box_edges(shared_ptr<Box> box) {
 	b2Filter filter;
 	filter.categoryBits = B2_CAT_MAIN;
 	filter.maskBits = B2_CAT_MAIN;
-	float half = (.5f * (float)BOX_PHYSICAL_SIZE / (float)BOX_SLOTS)
-			   + (1.f / (float)PIXELS_PER_METER);
+	float half = (.5f * (float)BOX_PHYSICAL_SIZE / (float)BOX_SLOTS);
+			   //+ (1.f / (float)PIXELS_PER_METER);
 	for (int i_face = 0; i_face < 4; i_face++) {
 		b2Vec2 a, b;
 		b2EdgeShape edge_shape;
