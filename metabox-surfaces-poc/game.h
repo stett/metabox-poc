@@ -9,6 +9,7 @@ namespace game {
 
 	// Public game functions
 	void setup();
+	void teardown();
 	void run();
 }
 

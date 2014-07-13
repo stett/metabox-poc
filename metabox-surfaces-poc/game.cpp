@@ -16,8 +16,11 @@ using namespace std;
 
 namespace game {
 
+	// Types
+	enum Mode { Play, Edit, Quit };
+
 	// Private game members
-	bool running = true;
+	Mode mode = Play;
 	shared_ptr<Box> root_box;
 	list<shared_ptr<Box>> boxes;
 	list<shared_ptr<sf::RenderTexture>> box_textures;
@@ -37,6 +40,7 @@ namespace game {
 	BoxFace nearest_door_face;
 	
 	// Private game functions
+	void set_mode(Mode new_mode);
 	void step(float dt);
 	void draw();
 	void get_view_transforms(sf::RenderStates& states);
@@ -54,6 +58,7 @@ namespace game {
 	void set_player_container(shared_ptr<Box> box, b2Vec2 position);
 	void set_player_container(shared_ptr<Box> box, b2Vec2 position, b2Vec2 velocity);
 	void center_view_on_slot(int sx, int sy, bool target = true);
+	void set_window_size(int w, int h);
 };
 
 void game::setup() {
@@ -110,13 +115,20 @@ void game::setup() {
 	font.loadFromFile("fonts/consola.ttf");
 
 	// Load textures
-	box_bg.loadFromFile("graphics/3grid.png");
+	box_bg.loadFromFile("graphics/7grid.png");
 	grid.loadFromFile("graphics/7grid.png");
 	player_tex.loadFromFile("graphics/player.png");
 	block_tex.loadFromFile("graphics/block.png");
 
 	// Load the open-meta-door shader
 	open_meta_door_shader.loadFromFile("open_meta_door.vert", "open_meta_door.frag");
+
+	//
+	set_mode(Edit);
+}
+
+void game::teardown() {
+	window->close();
 }
 
 void game::run() {
@@ -127,7 +139,7 @@ void game::run() {
 	sf::Time t0 = clock.getElapsedTime();
 	sf::Time t1;
 
-	while (running) {
+	while (mode != Quit) {
 		
 		t1 = clock.getElapsedTime();
 		float dt = (t1 - t0).asSeconds();
@@ -146,9 +158,43 @@ void game::run() {
 			box->world->ClearForces();
 		}
 	};
+
+	// Perform teardown actions before exiting program
+	teardown();
+}
+
+void game::set_mode(Mode new_mode) {
+	if (mode == new_mode) return;
+	else mode = new_mode;
+
+	if (mode == Play) {
+		set_window_size(BOX_RENDER_SIZE, BOX_RENDER_SIZE);
+	} else {
+		sf::Vector2f pad(20, 60);
+		auto desktop_mode = sf::VideoMode::getDesktopMode();
+		set_window_size(desktop_mode.width - 2 * pad.x, desktop_mode.height - 2 * pad.y);
+	}
+}
+
+
+
+void game::set_window_size(int width, int height) {
+	auto desktop_mode = sf::VideoMode::getDesktopMode();
+	window->setSize(sf::Vector2u(width, height));
+	window->setView(sf::View(sf::FloatRect(0, 0, width, height)));
+	window->setPosition(sf::Vector2i((desktop_mode.width - width) * .5f, (desktop_mode.height - height) * .5f));
+	//window->setActive();
+	/*glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+	glOrtho(0.0f, width, 0.0f, height, -1.0f, 1.0f);
+	glMatrixMode(GL_MODELVIEW);
+	glViewport(0, 0, width, height);*/
 }
 
 void game::step(float dt) {
+
+	// If the window has closed, stop the game
+	if (!window->isOpen()) set_mode(Quit);
 
 	// Process events
 	sf::Event event;
@@ -165,11 +211,18 @@ void game::step(float dt) {
 		//
 		if (event.type == sf::Event::KeyPressed) {
 
-			if (event.key.code == sf::Keyboard::Escape) window->close();
-
 			if (event.key.code == sf::Keyboard::Up || event.key.code == sf::Keyboard::W) {
 				player.body->ApplyForceToCenter(b2Vec2(0, -250), true);
 			}
+
+			/// TEMP ///
+			if (event.key.code == sf::Keyboard::Q) {
+				if (player.container->children.size()) {
+					auto box = player.container->children.back();
+					box->target_sx += 1;
+				}
+			}
+			/// END TEMP ///
 		}
 	}
 
@@ -181,6 +234,10 @@ void game::step(float dt) {
 	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Down) || sf::Keyboard::isKeyPressed(sf::Keyboard::S))
 		player.body->ApplyForceToCenter(b2Vec2(0, 5), true);
 
+	// Switch between program modes
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::F1)) set_mode(Play);
+	else if (sf::Keyboard::isKeyPressed(sf::Keyboard::F2)) set_mode(Edit);
+	else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Escape)) set_mode(Quit);
 
 	// Update all boxes
 	for (auto box : boxes) {
@@ -204,11 +261,11 @@ void game::step(float dt) {
 			if (door) {
 				if (door->open) {
 					if (door->t < 1)
-						door->t += 4 * dt;
+						door->t += 3 * dt;
 					else door->t = 1;
 				} else {
 					if (door->t > 0)
-						door->t -= 4 * dt;
+						door->t -= 3 * dt;
 					else door->t = 0;
 				}
 			}
@@ -234,14 +291,6 @@ void game::step(float dt) {
 			auto player_pos = player.body->GetPosition();
 			auto diff = vec2f(door_pos) - vec2f(player_pos);
 			float dist = diff.length();
-
-			// If player is too far away, close door
-			/*
-			if (door->open) {
-				if (dist > max_door_dist)
-					open_box_door(player.container, (BoxFace)face, false);
-			}
-			*/
 			
 			// If this is the closest door thus far, save it
 			if (dist < nearest_door_dist) {
@@ -265,14 +314,6 @@ void game::step(float dt) {
 									   face == 0 ? -1 : (face == 2 ?  1 : 0)) * .5f;
 				vec2f diff = door_pos - player_pos;
 				float dist = diff.length();
-
-				// If player is too far away, close door
-				/*
-				if (door->open) {
-					if (dist > max_door_dist)
-						open_box_door(box, (BoxFace)face, false);
-				}
-				*/
 				
 				// If this is the closest door thus far, save it
 				if (dist < nearest_door_dist) {
@@ -285,7 +326,9 @@ void game::step(float dt) {
 	}
 
 	// If we found a close enough door, open it!
-	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Space) && nearest_door)
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Space) &&
+		nearest_door &&
+		nearest_door_dist < max_door_dist)
 		open_box_door(nearest_door->parent, nearest_door_face, true);
 
 	// Process player meta-transitions
@@ -361,10 +404,9 @@ void game::step(float dt) {
 	view.x = view.x + (view.tx - view.x) * 3 * dt;
 	view.y = view.y + (view.ty - view.y) * 3 * dt;
 	view.scale = view.scale + (view.tscale - view.scale) * 4 * dt;
-	
-	// Stop running when the window is closed
-	running = window->isOpen();
 }
+
+
 
 void game::draw() {
 
@@ -372,8 +414,9 @@ void game::draw() {
 	window->clear(sf::Color(100, 100, 100));
 
 	//
-	//render_editor();
-	render_game();
+	if (mode == Play) render_game();
+	else if (mode == Edit) render_editor();
+	
 
 	// Draw the FPS
 	sf::Text text(to_string((int)fps), font, 12);
@@ -435,17 +478,23 @@ void game::render_editor() {
 	// Render the boxes to their textures
 	render_box(root_box);
 
+	// Decide on a box size and max number of boxes per row
+	float box_pad = 26.0f;
+	float box_size = window->getSize().x / 3.0f - 4.0f * box_pad;
+	//if (box_size < 300) box_size = window->getSize().x / 4.0f - 4.0f * box_pad;
+	float box_scale = box_size / (float)BOX_RENDER_SIZE;
+
 	// Draw all the box textures & calculate thier positions
 	sf::Vector2i ipos(0, 0);
 	map<int, sf::Vector2f> box_positions;
 	int iw = 3;
-	float pad = 26;
 	for (auto box : boxes) {
 		if (!box->texture) continue;
 
 		// Convert the rendered box texture to a sprite and draw it to the screen
 		sf::Sprite sprite(box->texture->getTexture());
-		sf::Vector2f pos(pad + ipos.x * (BOX_RENDER_SIZE + pad), pad + ipos.y * (BOX_RENDER_SIZE + pad));
+		sprite.setScale(sf::Vector2f(box_scale, box_scale));
+		sf::Vector2f pos(box_pad + ipos.x * (box_size + box_pad), box_pad + ipos.y * (box_size + box_pad));
 		box_positions[box->id] = pos;
 		sprite.setPosition(pos);
 		sf::RenderStates states;
@@ -474,11 +523,11 @@ void game::render_editor() {
 			sf::Vertex h_line[2];
 			sf::Vertex v_line[2];
 			v_line[0].position.x = h_line[0].position.y =
-				v_line[1].position.x = h_line[1].position.y = i * (float)BOX_RENDER_SIZE / (float)BOX_PHYSICAL_SIZE;
+			v_line[1].position.x = h_line[1].position.y = i * box_size / (float)BOX_PHYSICAL_SIZE;
 			v_line[0].position.y = h_line[0].position.x = 0;
-			v_line[1].position.y = h_line[1].position.x = BOX_RENDER_SIZE;
+			v_line[1].position.y = h_line[1].position.x = box_size;
 			h_line[0].color = h_line[1].color =
-				v_line[0].color = v_line[1].color = sf::Color(255, 255, 255, 30);
+			v_line[0].color = v_line[1].color = sf::Color(255, 255, 255, 30);
 			window->draw(h_line, 2, sf::PrimitiveType::Lines, sf::RenderStates(transform));
 			window->draw(v_line, 2, sf::PrimitiveType::Lines, sf::RenderStates(transform));
 		}
@@ -490,7 +539,9 @@ void game::render_editor() {
 			auto pos = body->GetPosition();
 			auto ang = body->GetAngle();
 			sf::Transform transform;
-			transform.translate(box_position)
+			transform
+				.translate(box_position)
+				.scale(sf::Vector2f(box_scale, box_scale))
 				.translate(sf::Vector2f(pos.x * PIXELS_PER_METER, pos.y * PIXELS_PER_METER))
 				.rotate(ang * 180.f / 3.14159f);
 
@@ -542,22 +593,26 @@ void game::render_editor() {
 		for (int i = 0; i < 4; i++) {
 			if (box->doors[i]) {
 				sf::Transform transform;
-				transform.translate(box_position);
+				transform
+					.translate(box_position)
+					.scale(sf::Vector2f(box_scale, box_scale));
 
 				sf::Vector2f pos(
 					box->doors[i]->sx * BOX_METERS_PER_SLOT * PIXELS_PER_METER,
 					box->doors[i]->sy * BOX_METERS_PER_SLOT * PIXELS_PER_METER);
+
 				sf::RectangleShape rect;
 				rect.setPosition(pos);
 				rect.setSize(sf::Vector2f(BOX_METERS_PER_SLOT * PIXELS_PER_METER, BOX_METERS_PER_SLOT * PIXELS_PER_METER));
+
 				if (box->doors[i]->open) {
 					rect.setOutlineColor(sf::Color::Blue);
 					rect.setFillColor(sf::Color(0, 0, 255, 50));
-				}
-				else {
+				} else {
 					rect.setOutlineColor(sf::Color::Red);
 					rect.setFillColor(sf::Color(255, 0, 0, 50));
 				}
+
 				window->draw(rect, sf::RenderStates(transform));
 			}
 		}
@@ -567,7 +622,7 @@ void game::render_editor() {
 			sf::Transform transform;
 			transform.translate(box_position);
 
-			float size = (float)BOX_RENDER_SIZE / (float)BOX_SLOTS;
+			float size = box_size / (float)BOX_SLOTS;
 
 			// Slot highlight
 			sf::RectangleShape rect;
@@ -580,6 +635,9 @@ void game::render_editor() {
 
 			// Child box identifier string
 			sf::Text text(to_string(child->id), font, 12);
+			text.setPosition(sf::Vector2f(child->sx, child->sy) * size + sf::Vector2f(3, 3));
+			text.setColor(sf::Color(0, 0, 0, 255));
+			window->draw(text, sf::RenderStates(transform));
 			text.setPosition(sf::Vector2f(child->sx, child->sy) * size + sf::Vector2f(2, 2));
 			text.setColor(sf::Color(255, 255, 255, 255));
 			window->draw(text, sf::RenderStates(transform));
@@ -590,12 +648,15 @@ void game::render_editor() {
 			sf::Vertex line[2];
 			auto body_pos = box->body->GetPosition();
 			line[0].position = box_position; box->parent->body->GetPosition();
-			line[1].position = box_positions[box->parent->id] + sf::Vector2f(body_pos.x * PIXELS_PER_METER, body_pos.y * PIXELS_PER_METER);// +half;
+			line[1].position = box_positions[box->parent->id] + sf::Vector2f(body_pos.x * PIXELS_PER_METER * box_scale, body_pos.y * PIXELS_PER_METER * box_scale);// +half;
 			window->draw(line, 2, sf::PrimitiveType::Lines);
 		}
 
 		// Draw the box identifier string
-		sf::Text text(to_string(box->id), font, 12);
+		sf::Text text(to_string(box->id), font, 14);
+		text.setPosition(box_position + sf::Vector2f(3, 3));
+		text.setColor(sf::Color(0, 0, 0, 255));
+		window->draw(text);
 		text.setPosition(box_position + sf::Vector2f(2, 2));
 		text.setColor(sf::Color(255, 255, 255, 255));
 		window->draw(text);
