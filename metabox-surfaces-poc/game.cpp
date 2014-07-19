@@ -29,6 +29,7 @@ namespace game {
 	View view;
 	sf::Font font;
 	sf::Texture box_bg;
+	sf::Texture box_fg;
 	sf::Texture grid;
 	sf::Texture player_tex;
 	sf::Texture block_tex;
@@ -47,6 +48,7 @@ namespace game {
 	void render_game();
 	void render_editor();
 	void render_box(shared_ptr<Box> box);
+	void render_box_fg(shared_ptr<Box> box);
 	void get_box_shader(shared_ptr<Box> box, sf::RenderStates& states);
 	shared_ptr<Box> add_box(shared_ptr<Box> parent = 0, int sx = 0, int sy = 0);
 	void add_block(shared_ptr<Box> parent, int sx, int sy);
@@ -58,6 +60,7 @@ namespace game {
 	void set_player_container(shared_ptr<Box> box, b2Vec2 position);
 	void set_player_container(shared_ptr<Box> box, b2Vec2 position, b2Vec2 velocity);
 	void center_view_on_slot(int sx, int sy, bool target = true);
+	void center_view_on_parent_slot(int sx, int sy, bool target = true);
 	void set_window_size(int w, int h);
 };
 
@@ -105,10 +108,10 @@ void game::setup() {
 	add_block(d, 6, 6);
 
 	// Add the player to the first box and give it a body
-	set_player_container(b, b2Vec2(4, 3));
+	set_player_container(a, b2Vec2(4, 3));
 
 	// Create the main window
-	window = unique_ptr<sf::RenderWindow>(new sf::RenderWindow(sf::VideoMode(BOX_RENDER_SIZE, BOX_RENDER_SIZE), "Metabox Surfaces - Proof Of Concept", sf::Style::Default));
+	window = unique_ptr<sf::RenderWindow>(new sf::RenderWindow(sf::VideoMode(BOX_RENDER_SIZE, BOX_RENDER_SIZE), "Metabox Surfaces - Proof Of Concept", sf::Style::Close | sf::Style::Titlebar));
 	window->setActive(true);
 
 	// Create a graphical text to display
@@ -116,6 +119,7 @@ void game::setup() {
 
 	// Load textures
 	box_bg.loadFromFile("graphics/7grid.png");
+	box_fg.loadFromFile("graphics/glass.png");
 	grid.loadFromFile("graphics/7grid.png");
 	player_tex.loadFromFile("graphics/player.png");
 	block_tex.loadFromFile("graphics/block.png");
@@ -124,7 +128,7 @@ void game::setup() {
 	open_meta_door_shader.loadFromFile("open_meta_door.vert", "open_meta_door.frag");
 
 	//
-	set_mode(Edit);
+	//set_mode(Edit);
 }
 
 void game::teardown() {
@@ -183,12 +187,6 @@ void game::set_window_size(int width, int height) {
 	window->setSize(sf::Vector2u(width, height));
 	window->setView(sf::View(sf::FloatRect(0, 0, width, height)));
 	window->setPosition(sf::Vector2i((desktop_mode.width - width) * .5f, (desktop_mode.height - height) * .5f));
-	//window->setActive();
-	/*glMatrixMode(GL_PROJECTION);
-	glLoadIdentity();
-	glOrtho(0.0f, width, 0.0f, height, -1.0f, 1.0f);
-	glMatrixMode(GL_MODELVIEW);
-	glViewport(0, 0, width, height);*/
 }
 
 void game::step(float dt) {
@@ -451,10 +449,12 @@ void game::render_game() {
 		// Apply view transformations
 		get_view_transforms(states);
 
+		// Up-scale and position the parent box
 		vec2f pos = vec2f(active_box->sx, active_box->sy) * PIXELS_PER_METER * BOX_METERS_PER_SLOT;
 		states.transform.scale(sf::Vector2f(BOX_SLOTS, BOX_SLOTS))
 			  .translate(-pos.toVector2f());
 
+		// Draw the parent
 		window->draw(sprite, states);
 	}
 
@@ -471,6 +471,18 @@ void game::render_game() {
 
 	// Draw the active box
 	window->draw(sprite, states);
+
+	// Draw the foreground texture with alpha inversely-
+	// proportional to the zoom level
+	if (view.scale < 1) {
+		states.shader = 0;
+		sf::Sprite fg_sprite(*active_box->fg);
+		fg_sprite.setColor(sf::Color(255, 255, 255, 255.f * (1 - view.scale)));
+		fg_sprite.setScale(sf::Vector2f(
+			(float)BOX_RENDER_SIZE / (float)active_box->fg->getSize().x,
+			(float)BOX_RENDER_SIZE / (float)active_box->fg->getSize().y));
+		window->draw(fg_sprite, states);
+	}
 }
 
 void game::render_editor() {
@@ -481,13 +493,12 @@ void game::render_editor() {
 	// Decide on a box size and max number of boxes per row
 	float box_pad = 26.0f;
 	float box_size = window->getSize().x / 3.0f - 4.0f * box_pad;
-	//if (box_size < 300) box_size = window->getSize().x / 4.0f - 4.0f * box_pad;
 	float box_scale = box_size / (float)BOX_RENDER_SIZE;
+	int boxes_per_row = 3;
 
 	// Draw all the box textures & calculate thier positions
 	sf::Vector2i ipos(0, 0);
 	map<int, sf::Vector2f> box_positions;
-	int iw = 3;
 	for (auto box : boxes) {
 		if (!box->texture) continue;
 
@@ -501,9 +512,20 @@ void game::render_editor() {
 		get_box_shader(box, states);
 		window->draw(sprite, states);
 
+		// Draw the box's fg texture
+		if (box != player.container) {
+			states.shader = 0;
+			sf::Sprite fg_sprite(*box->fg);
+			fg_sprite.setPosition(pos);
+			fg_sprite.setScale(sf::Vector2f(
+				box_size / (float)box->fg->getSize().x,
+				box_size / (float)box->fg->getSize().y));
+			window->draw(fg_sprite, states);
+		}
+
 		// Calculate the next position indices
 		ipos.x++;
-		if (ipos.x >= iw) {
+		if (ipos.x >= boxes_per_row) {
 			ipos.x = 0;
 			ipos.y++;
 		}
@@ -515,6 +537,12 @@ void game::render_editor() {
 
 		// Get the position of this box on the gui
 		auto box_position = box_positions[box->id];
+
+		// Highlight the active box
+		if (box == player.container) {
+
+			// TODO
+		}
 
 		// Draw grid
 		for (int i = 0; i < BOX_SLOTS; i++) {
@@ -670,10 +698,14 @@ void game::render_box(shared_ptr<Box> box) {
 	box->texture->clear();
 
 	// Draw the bg texture
-	sf::Sprite bg_sprite(box_bg);
-	float scale = (float)BOX_RENDER_SIZE / (float)box_bg.getSize().x;
-	bg_sprite.setScale(sf::Vector2f(scale, scale));
-	box->texture->draw(bg_sprite);
+	{
+		sf::Sprite bg_sprite(*box->bg);
+		float scale = (float)BOX_RENDER_SIZE / (float)box->bg->getSize().x;
+		bg_sprite.setScale(sf::Vector2f(
+			(float)BOX_RENDER_SIZE / (float)box->bg->getSize().x,
+			(float)BOX_RENDER_SIZE / (float)box->bg->getSize().y));
+		box->texture->draw(bg_sprite);
+	}
 
 	// If the player is in this box, render it
 	if (player.container == box) {
@@ -713,6 +745,15 @@ void game::render_box(shared_ptr<Box> box) {
 			sf::Sprite child_sprite(child->texture->getTexture());
 			child_sprite.setOrigin(sf::Vector2f(BOX_PHYSICAL_SIZE * PIXELS_PER_METER * .5f, BOX_PHYSICAL_SIZE * PIXELS_PER_METER * .5f));
 			box->texture->draw(child_sprite, child_states);
+
+			// Draw the child's fg texture
+			child_states.shader = 0;
+			sf::Sprite fg_sprite(*box->fg);
+			fg_sprite.setOrigin((vec2f(box->fg->getSize()) * .5f).toVector2f());
+			fg_sprite.setScale(sf::Vector2f(
+				(float)BOX_RENDER_SIZE / (float)box->fg->getSize().x,
+				(float)BOX_RENDER_SIZE / (float)box->fg->getSize().y));
+			box->texture->draw(fg_sprite, child_states);
 		}
 	}
 
@@ -731,6 +772,8 @@ void game::render_box(shared_ptr<Box> box) {
 			box->texture->draw(block_sprite);
 		}
 	}
+
+	
 
 	//
 	box->texture->display();
@@ -762,6 +805,10 @@ shared_ptr<Box> game::add_box(shared_ptr<Box> parent, int sx, int sy) {
 	auto box = shared_ptr<Box>(new Box());
 	box->id = next_box_id ++;
 	boxes.push_back(box);
+
+	// 
+	box->bg = &box_bg;
+	box->fg = &box_fg;
 
 	// Set the initial box state
 	box->sx = box->target_sx = sx;
@@ -1014,26 +1061,42 @@ void game::set_player_container(shared_ptr<Box> box, b2Vec2 position, b2Vec2 vel
 
 		// Popping
 		if (player.container->parent == box) {
-			view.scale = 2;
+			view.scale = (float)BOX_SLOTS * .5f;
 			center_view_on_slot(player.container->sx, player.container->sy, false);
 
 		// Pushing
 		} else if (box->parent == player.container) {
 			view.scale = 1.f / (float)BOX_SLOTS;
+			center_view_on_parent_slot(box->sx, box->sy, false);
 		}
 	}
+
+	auto v = view;
 
 	// Set the player container
 	player.container = box;
 }
 
 void game::center_view_on_slot(int sx, int sy, bool target) {
-	int x = (BOX_SLOTS * .5f - sx) * PIXELS_PER_METER * BOX_METERS_PER_SLOT;
-	int y = (BOX_SLOTS * .5f - sy) * PIXELS_PER_METER * BOX_METERS_PER_SLOT;
+	int x = ((BOX_SLOTS - 1) * .5f - sx) * PIXELS_PER_METER * BOX_METERS_PER_SLOT;
+	int y = ((BOX_SLOTS - 1) * .5f - sy) * PIXELS_PER_METER * BOX_METERS_PER_SLOT;
 	if (target) {
 		view.tx = x;
 		view.ty = y;
 	} else {
+		view.x = x;
+		view.y = y;
+	}
+}
+
+void game::center_view_on_parent_slot(int sx, int sy, bool target) {
+	int x = -PIXELS_PER_METER * BOX_METERS_PER_SLOT * ((BOX_SLOTS - 1) * .5f - sx) / view.scale;
+	int y = -PIXELS_PER_METER * BOX_METERS_PER_SLOT * ((BOX_SLOTS - 1) * .5f - sy) / view.scale;
+	if (target) {
+		view.tx = x;
+		view.ty = y;
+	}
+	else {
 		view.x = x;
 		view.y = y;
 	}

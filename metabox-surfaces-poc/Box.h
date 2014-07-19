@@ -38,6 +38,8 @@ public:
 	list<shared_ptr<Box>> children;
 	shared_ptr<sf::RenderTexture> texture;
 	shared_ptr<b2World> world;
+	sf::Texture* bg;
+	sf::Texture* fg;
 	b2Body* body;
 	b2Body* world_edges;
 	b2Fixture* body_edges[4];
