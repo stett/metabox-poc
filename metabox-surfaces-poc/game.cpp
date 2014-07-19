@@ -95,6 +95,9 @@ void game::setup() {
 		add_block(a, i, 5);
 		add_block(a, i, 4);
 		add_block(a, i, 3);
+
+		add_block(e, 2, i);
+		add_block(e, 4, i);
 	}
 
 	add_block(b, 0, 1);
@@ -103,6 +106,16 @@ void game::setup() {
 	add_block(b, 1, 2);
 	add_block(b, 2, 2);
 	add_block(b, 3, 2);
+
+	add_block(c, 0, 4);
+	add_block(c, 1, 4);
+	add_block(c, 2, 4);
+	add_block(c, 3, 4);
+	add_block(c, 4, 4);
+	add_block(c, 4, 3);
+	add_block(c, 4, 2);
+	add_block(c, 4, 1);
+	add_block(c, 4, 0);
 
 	add_block(d, 6, 5);
 	add_block(d, 6, 6);
@@ -758,7 +771,7 @@ void game::render_box(shared_ptr<Box> box) {
 	}
 
 	// Draw blocks
-	for (int sx = 0; sx < BOX_SLOTS; sx ++)
+	for (int sx = 0; sx < BOX_SLOTS; sx++)
 	for (int sy = 0; sy < BOX_SLOTS; sy++) {
 		if (box->blocks[sx][sy] == 1) {
 			sf::Sprite block_sprite(block_tex);
@@ -773,7 +786,27 @@ void game::render_box(shared_ptr<Box> box) {
 		}
 	}
 
-	
+	// Draw walls
+	float thickness = 6.f;
+	for (int face = 0; face < 4; face++) {
+		sf::Sprite block_sprite(block_tex);
+		if ((BoxFace)face == Top || (BoxFace)face == Bottom) {
+			block_sprite.setScale(sf::Vector2f(
+				(float)BOX_SLOTS * (float)BOX_PIXELS_PER_SLOT / block_tex.getSize().x,
+				thickness / block_tex.getSize().y));
+		} else {
+			block_sprite.setScale(sf::Vector2f(
+				thickness / block_tex.getSize().x,
+				(float)BOX_SLOTS * (float)BOX_PIXELS_PER_SLOT / block_tex.getSize().y));
+		}
+
+		if ((BoxFace)face == Right) {
+			block_sprite.setPosition(sf::Vector2f(BOX_SLOTS * BOX_PIXELS_PER_SLOT - thickness, 0));
+		} else if ((BoxFace)face == Bottom) {
+			block_sprite.setPosition(sf::Vector2f(0, BOX_SLOTS * BOX_PIXELS_PER_SLOT - thickness));
+		}
+		box->texture->draw(block_sprite);
+	}
 
 	//
 	box->texture->display();
