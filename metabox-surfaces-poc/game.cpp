@@ -373,17 +373,20 @@ void game::step(float dt) {
 		float max_pos = (float)BOX_PHYSICAL_SIZE;
 		if (player_pos.x < 0 || player_pos.y < 0 || player_pos.x > max_pos || player_pos.y > max_pos) {
 
-			if (player.container->parent) {
+			auto container = (player.recursions.empty() ? player.container : player.recursions.top());
+
+			//if (player.container->parent || !player.recursions.empty()) {
+			if (container->parent) {
 
 				// Calculate the new player position
 				float off = .5f * (float)BOX_PHYSICAL_SIZE / (float)BOX_SLOTS;
 				player_pos -= b2Vec2(.5f * BOX_PHYSICAL_SIZE, .5f * BOX_PHYSICAL_SIZE);
 				player_pos.x /= (float)BOX_SLOTS;
 				player_pos.y /= (float)BOX_SLOTS;
-				player_pos += player.container->body->GetPosition();
+				player_pos += container->body->GetPosition();
 
-				// Set the player container
-				set_player_container(player.container->parent, player_pos, player.body->GetLinearVelocity());
+				// Set the new player container
+				set_player_container(container->parent, player_pos, player.body->GetLinearVelocity());
 				player_transfered = true;
 			}
 		}
@@ -470,7 +473,7 @@ void game::render_game() {
 	auto active_box = player.container;
 	auto active_parent = active_box->parent;
 
-	// If the active box has a parent, 
+	// If the active box has a parent
 	if (active_parent) {
 		render_box(active_parent);
 		sf::Sprite sprite(active_parent->texture->getTexture());
@@ -1129,11 +1132,6 @@ void game::set_player_container(shared_ptr<Box> box, b2Vec2 position, b2Vec2 vel
 	// reinstantiate the player's body
 	//if (box != player.container) {}
 
-	// If we're looking at a recursive box, look instead at it's parent
-	//bool recursive = box->recursive;
-	//if (recursive)
-	//	box = box->parent;
-
 	// If the player already has a body, delete it
 	if (player.body) {
 		player.body->GetWorld()->DestroyBody(player.body);
@@ -1167,14 +1165,24 @@ void game::set_player_container(shared_ptr<Box> box, b2Vec2 position, b2Vec2 vel
 			view.scale = (float)BOX_SLOTS * .5f;
 			center_view_on_slot(player.container->sx, player.container->sy, false);
 
+		// Popping recursively
+		} else if (player.container == box) {
+			view.scale = (float)BOX_SLOTS * .5f;
+			auto container = player.recursions.top();
+			center_view_on_slot(container->sx, container->sy, false);
+			player.recursions.pop();
+
 		// Pushing
 		} else if (box->parent == player.container) {
 			view.scale = 1.f / (float)BOX_SLOTS;
 			center_view_on_parent_slot(box->sx, box->sy, false);
+
+			// If we're pushing into a recursive box, add it to the recursive stack
+			if (box->recursive) {
+				player.recursions.push(box);
+			}
 		}
 	}
-
-	auto v = view;
 
 	// Set the player container
 	player.container = (box->recursive ? box->parent : box);
