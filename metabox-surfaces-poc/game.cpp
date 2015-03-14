@@ -56,6 +56,7 @@ namespace game {
 	void add_block(shared_ptr<Box> parent, int sx, int sy);
 	void assign_box_texture(shared_ptr<Box> box);
 	void set_box_door(shared_ptr<Box> box, BoxFace face, int i, bool open = false);
+	void set_box_door(shared_ptr<Box> box, BoxFace face, int sx, int sy, bool open);
 	void open_box_door(shared_ptr<Box> box, BoxFace, bool open);
 	void generate_box_edges(shared_ptr<Box> box);
 	void generate_world_edges(shared_ptr<Box> box);
@@ -127,7 +128,7 @@ void game::setup() {
 	root_box = a;
 	set_box_door(a, Right, 5);
 	auto b = add_box(a, 2, 5, true);
-	auto c = add_box(a, 1, 3);
+	auto c = add_box(a, 1, 4);
 	set_box_door(c, Right, 6);
 
 	for (int i = 0; i < 7; i++) {
@@ -900,9 +901,12 @@ shared_ptr<Box> game::add_box(shared_ptr<Box> parent, int sx, int sy, bool recur
 
 	// If it's recursive, set the same doors on it as it's parent
 	if (recursive && parent) {
-
-		for (int i = 0; i < 4; i++)
-			box->doors[i] = parent->doors[i];
+		for (int i = 0; i < 4; i++) {
+			auto door = parent->doors[i];
+			if (door) {
+				set_box_door(box, (BoxFace)i, door->sx, door->sy, door->open);
+			}
+		}
 	}
 
 	// If this box is a child of another box...
@@ -989,6 +993,10 @@ void game::set_box_door(shared_ptr<Box> box, BoxFace face, int i, bool open) {
 		sy = BOX_SLOTS - 1 - i;
 	}
 
+	set_box_door(box, face, sx, sy, open);
+}
+
+void game::set_box_door(shared_ptr<Box> box, BoxFace face, int sx, int sy, bool open) {
 	auto door = shared_ptr<BoxDoor>(new BoxDoor(box, false, 0, 0));
 	door->sx = sx;
 	door->sy = sy;
@@ -1122,8 +1130,9 @@ void game::set_player_container(shared_ptr<Box> box, b2Vec2 position, b2Vec2 vel
 	//if (box != player.container) {}
 
 	// If we're looking at a recursive box, look instead at it's parent
-	if (box->recursive)
-		box = box->parent;
+	//bool recursive = box->recursive;
+	//if (recursive)
+	//	box = box->parent;
 
 	// If the player already has a body, delete it
 	if (player.body) {
@@ -1137,7 +1146,7 @@ void game::set_player_container(shared_ptr<Box> box, b2Vec2 position, b2Vec2 vel
 	body_def.userData = &player;
 	body_def.position = position;
 	body_def.linearVelocity = velocity;
-	player.body = box->world->CreateBody(&body_def);
+	player.body = (!box->recursive ? box->world->CreateBody(&body_def) : box->parent->world->CreateBody(&body_def));
 	player.body->SetFixedRotation(true);
 
 	// Create a rectangular fixture for him
@@ -1168,7 +1177,7 @@ void game::set_player_container(shared_ptr<Box> box, b2Vec2 position, b2Vec2 vel
 	auto v = view;
 
 	// Set the player container
-	player.container = box;
+	player.container = (box->recursive ? box->parent : box);
 }
 
 void game::center_view_on_slot(int sx, int sy, bool target) {
