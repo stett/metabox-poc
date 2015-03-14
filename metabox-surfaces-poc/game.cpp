@@ -51,7 +51,7 @@ namespace game {
 	void render_child(shared_ptr<Box> parent, shared_ptr<Box> box);
 	void render_box_fg(shared_ptr<Box> box);
 	void get_box_shader(shared_ptr<Box> box, sf::RenderStates& states);
-	shared_ptr<Box> add_box(shared_ptr<Box> parent = 0, int sx = 0, int sy = 0);
+	shared_ptr<Box> add_box(shared_ptr<Box> parent = 0, int sx = 0, int sy = 0, bool recursive = false);
 	void make_metabox(shared_ptr<Box> box, int sx, int sy);
 	void add_block(shared_ptr<Box> parent, int sx, int sy);
 	void assign_box_texture(shared_ptr<Box> box);
@@ -124,9 +124,11 @@ void game::setup() {
 	add_block(d, 6, 6);*/
 
 	auto a = add_box();
-	auto b = add_box(a, 3, 5);
-	b->recursive = true;
 	root_box = a;
+	set_box_door(a, Right, 5);
+	auto b = add_box(a, 2, 5, true);
+	auto c = add_box(a, 1, 3);
+	set_box_door(c, Right, 6);
 
 	for (int i = 0; i < 7; i++) {
 		add_block(a, i, 6);
@@ -183,9 +185,9 @@ void game::run() {
 		draw();
 
 		// Clear old forces
-		for (auto box : boxes) {
-			box->world->ClearForces();
-		}
+		for (auto box : boxes)
+			if (box->world)
+				box->world->ClearForces();
 	};
 
 	// Perform teardown actions before exiting program
@@ -264,7 +266,8 @@ void game::step(float dt) {
 
 	// Update all boxes
 	for (auto box : boxes) {
-		box->world->Step(dt, 6, 2);
+		if (box->world)
+			box->world->Step(dt, 6, 2);
 
 		// Update the box's phsyics body
 		if (box->body) {
@@ -327,6 +330,7 @@ void game::step(float dt) {
 	// Close/open sub metabox doors
 	for (auto box : player.container->children) {
 		for (int face = 0; face < 4; face++) {
+			//auto door = (box->recursive ? box->parent->doors[face] : box->doors[face]);
 			auto door = box->doors[face];
 			if (door) {
 
@@ -863,25 +867,43 @@ void game::get_box_shader(shared_ptr<Box> box, sf::RenderStates& render_states) 
 	}
 }
 
-shared_ptr<Box> game::add_box(shared_ptr<Box> parent, int sx, int sy) {
+shared_ptr<Box> game::add_box(shared_ptr<Box> parent, int sx, int sy, bool recursive) {
 
 	// Create the box & add it to the box list
 	auto box = shared_ptr<Box>(new Box());
 	box->id = next_box_id ++;
 	boxes.push_back(box);
 
-	// 
-	box->bg = &box_bg;
-	box->fg = &box_fg;
-
 	// Set the initial box state
 	box->sx = box->target_sx = sx;
 	box->sy = box->target_sy = sy;
 	box->state = Gridded;
 
-	// Generate a physics world for the new box
-	box->world = shared_ptr<b2World>(new b2World(b2Vec2(0, GRAVITY)));
-	generate_world_edges(box);
+	// Set recursiveness
+	box->recursive = recursive;
+
+	// If it's not recursive, do stuff for normal boxes that doesn't apply to recursive boxes.
+	if (!recursive) {
+
+		// Set bg and fg textures
+		box->bg = &box_bg;
+		box->fg = &box_fg;
+
+		// Generate a physics world for the new box
+		box->world = shared_ptr<b2World>(new b2World(b2Vec2(0, GRAVITY)));
+		generate_world_edges(box);
+
+		// Give the box a texture space
+		// TEMP
+		assign_box_texture(box);
+	}
+
+	// If it's recursive, set the same doors on it as it's parent
+	if (recursive && parent) {
+
+		for (int i = 0; i < 4; i++)
+			box->doors[i] = parent->doors[i];
+	}
 
 	// If this box is a child of another box...
 	if (parent) {
@@ -912,10 +934,6 @@ shared_ptr<Box> game::add_box(shared_ptr<Box> parent, int sx, int sy) {
 		// Add the box's toggleable edges
 		generate_box_edges(box);
 	}
-
-	// Give the box a texture space
-	// TEMP
-	assign_box_texture(box);
 
 	//
 	return box;
@@ -992,6 +1010,10 @@ void game::open_box_door(shared_ptr<Box> box, BoxFace face, bool open) {
 	generate_box_edges(box);
 	generate_world_edges(box);
 	
+	// Open same door for recursive children
+	for (auto child : box->children)
+		if (child->recursive)
+			open_box_door(child, face, open);
 }
 
 void game::generate_box_edges(shared_ptr<Box> box) {
@@ -1094,6 +1116,14 @@ void game::set_player_container(shared_ptr<Box> box, b2Vec2 position) {
 	set_player_container(box, position, b2Vec2(0, 0));
 }
 void game::set_player_container(shared_ptr<Box> box, b2Vec2 position, b2Vec2 velocity) {
+
+	// If we're not setting the container to the current container,
+	// reinstantiate the player's body
+	//if (box != player.container) {}
+
+	// If we're looking at a recursive box, look instead at it's parent
+	if (box->recursive)
+		box = box->parent;
 
 	// If the player already has a body, delete it
 	if (player.body) {
