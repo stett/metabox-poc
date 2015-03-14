@@ -17,4 +17,7 @@ Box::Box() {
 	for (int sy = 0; sy < BOX_SLOTS; sy++) {
 		blocks[sx][sy] = 0;
 	}
+
+
+	recursive = false;
 }

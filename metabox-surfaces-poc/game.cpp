@@ -48,9 +48,11 @@ namespace game {
 	void render_game();
 	void render_editor();
 	void render_box(shared_ptr<Box> box);
+	void render_child(shared_ptr<Box> parent, shared_ptr<Box> box);
 	void render_box_fg(shared_ptr<Box> box);
 	void get_box_shader(shared_ptr<Box> box, sf::RenderStates& states);
 	shared_ptr<Box> add_box(shared_ptr<Box> parent = 0, int sx = 0, int sy = 0);
+	void make_metabox(shared_ptr<Box> box, int sx, int sy);
 	void add_block(shared_ptr<Box> parent, int sx, int sy);
 	void assign_box_texture(shared_ptr<Box> box);
 	void set_box_door(shared_ptr<Box> box, BoxFace face, int i, bool open = false);
@@ -70,6 +72,7 @@ void game::setup() {
 	// TEMP
 	//center_view_on_slot(7, 7, false);
 
+	/*
 	// Add a bunch of boxes
 	auto a = add_box();
 	auto b = add_box(a, 2, 2);
@@ -118,7 +121,16 @@ void game::setup() {
 	add_block(c, 4, 0);
 
 	add_block(d, 6, 5);
-	add_block(d, 6, 6);
+	add_block(d, 6, 6);*/
+
+	auto a = add_box();
+	auto b = add_box(a, 3, 5);
+	b->recursive = true;
+	root_box = a;
+
+	for (int i = 0; i < 7; i++) {
+		add_block(a, i, 6);
+	}
 
 	// Add the player to the first box and give it a body
 	set_player_container(a, b2Vec2(4, 3));
@@ -344,9 +356,9 @@ void game::step(float dt) {
 
 	// Process player meta-transitions
 	// TODO: This *should* transfer to the ADJACENT box, not just always to the parent.
-	//       Once the adjacency system is up we can do it that wasy. Doing it the right
+	//       Once the adjacency system is up we can do it that way. Doing it the right
 	//		 way will prevent the need to separate entering/exiting metaboxes, and will
-	//		 also automatically facilitate "lateral" transitions in the box-tree.
+	//		 also automatically facilitate "lateral" transitions in the box-tree. Woot.
 	{
 		bool player_transfered = false;
 
@@ -720,7 +732,7 @@ void game::render_box(shared_ptr<Box> box) {
 		box->texture->draw(bg_sprite);
 	}
 
-	// If the player is in this box, render it
+	// If the player is in this box, render him
 	if (player.container == box) {
 		sf::Sprite player_sprite(player_tex);
 		auto player_physical_position = player.body->GetPosition();
@@ -731,44 +743,10 @@ void game::render_box(shared_ptr<Box> box) {
 		box->texture->draw(player_sprite);
 	}
 
-	// Render and draw children
-	for (auto child : box->children) {
-
-		// Render the child
-		render_box(child);
-
-		// Draw the child texture to the slot
-		if (child->texture) {
-
-			// Create the render state
-			sf::RenderStates child_states;
-
-			// Calculate the child transform
-			auto child_physical_pos = child->body->GetPosition();
-			auto child_physical_ang = child->body->GetAngle();
-			auto child_render_pos = sf::Vector2f(child_physical_pos.x * PIXELS_PER_METER, child_physical_pos.y * PIXELS_PER_METER);
-			child_states.transform.translate(child_render_pos)
-								  .rotate(child_physical_ang * 180.f / 3.14159f)
-							      .scale(sf::Vector2f(1.f / (float)BOX_SLOTS, 1.f / (float)BOX_SLOTS));
-
-			// Set up the child shader if necessary
-			get_box_shader(child, child_states);
-
-			// Draw the child texture
-			sf::Sprite child_sprite(child->texture->getTexture());
-			child_sprite.setOrigin(sf::Vector2f(BOX_PHYSICAL_SIZE * PIXELS_PER_METER * .5f, BOX_PHYSICAL_SIZE * PIXELS_PER_METER * .5f));
-			box->texture->draw(child_sprite, child_states);
-
-			// Draw the child's fg texture
-			child_states.shader = 0;
-			sf::Sprite fg_sprite(*box->fg);
-			fg_sprite.setOrigin((vec2f(box->fg->getSize()) * .5f).toVector2f());
-			fg_sprite.setScale(sf::Vector2f(
-				(float)BOX_RENDER_SIZE / (float)box->fg->getSize().x,
-				(float)BOX_RENDER_SIZE / (float)box->fg->getSize().y));
-			box->texture->draw(fg_sprite, child_states);
-		}
-	}
+	// Render and draw non-recursive children
+	for (auto child : box->children)
+		if (!child->recursive)
+			render_child(box, child);
 
 	// Draw blocks
 	for (int sx = 0; sx < BOX_SLOTS; sx++)
@@ -808,8 +786,61 @@ void game::render_box(shared_ptr<Box> box) {
 		box->texture->draw(block_sprite);
 	}
 
+	// Draw all recursive children
+	for (auto child : box->children)
+		if (child->recursive)
+			render_child(box, child);
+
 	//
 	box->texture->display();
+}
+
+void game::render_child(shared_ptr<Box> parent, shared_ptr<Box> child) {
+
+	// Render the child
+	//if (!child->recursive)
+	//	render_box(child);
+
+	// Get the child's texture
+	shared_ptr<sf::RenderTexture> child_texture = 0;
+	if (child->recursive) {
+		child_texture = parent->texture;
+	} else {
+		render_box(child);
+		child_texture = child->texture;
+	}
+
+	// Draw the child texture to the slot
+	if (child_texture) {
+
+		// Create the render state
+		sf::RenderStates child_states;
+
+		// Calculate the child transform
+		auto child_physical_pos = child->body->GetPosition();
+		auto child_physical_ang = child->body->GetAngle();
+		auto child_render_pos = sf::Vector2f(child_physical_pos.x * PIXELS_PER_METER, child_physical_pos.y * PIXELS_PER_METER);
+		child_states.transform.translate(child_render_pos)
+			.rotate(child_physical_ang * 180.f / 3.14159f)
+			.scale(sf::Vector2f(1.f / (float)BOX_SLOTS, 1.f / (float)BOX_SLOTS));
+
+		// Set up the child shader if necessary
+		get_box_shader(child, child_states);
+
+		// Draw the child texture
+		sf::Sprite child_sprite(child_texture->getTexture());
+		child_sprite.setOrigin(sf::Vector2f(BOX_PHYSICAL_SIZE * PIXELS_PER_METER * .5f, BOX_PHYSICAL_SIZE * PIXELS_PER_METER * .5f));
+		parent->texture->draw(child_sprite, child_states);
+
+		// Draw the child's fg texture
+		child_states.shader = 0;
+		sf::Sprite fg_sprite(*parent->fg);
+		fg_sprite.setOrigin((vec2f(parent->fg->getSize()) * .5f).toVector2f());
+		fg_sprite.setScale(sf::Vector2f(
+			(float)BOX_RENDER_SIZE / (float)parent->fg->getSize().x,
+			(float)BOX_RENDER_SIZE / (float)parent->fg->getSize().y));
+		parent->texture->draw(fg_sprite, child_states);
+	}
 }
 
 void game::get_box_shader(shared_ptr<Box> box, sf::RenderStates& render_states) {

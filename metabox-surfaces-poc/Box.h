@@ -28,7 +28,7 @@ public:
 	int sx;
 	int sy;
 	float t;
-	BoxDoor(shared_ptr<Box> _parent, bool _open, int _sx, int _sy) : parent(_parent), open(_open), sx(_sx), sy(_sy), t(1) {};
+	BoxDoor(shared_ptr<Box> _parent, bool _open, int _sx, int _sy) : parent(_parent), open(_open), sx(_sx), sy(_sy), t(1) {}
 };
 
 class Box {
@@ -53,6 +53,8 @@ public:
 	int target_sx;
 	int target_sy;
 	int blocks[BOX_SLOTS][BOX_SLOTS];
+
+	bool recursive;
 
 	Box();
 };
