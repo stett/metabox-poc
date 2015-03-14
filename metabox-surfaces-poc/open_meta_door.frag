@@ -2,6 +2,8 @@ uniform sampler2D texture;
 uniform float t;
 uniform float face;
 uniform float face_pos;
+uniform float entropy;
+uniform float seed;
 
 float smoothstep(float a, float b, float t) {
 	return a + (b - a) * t * t * (3 - 2 * t);
@@ -16,6 +18,10 @@ float expand_perpendicular_axis(float t, float x) {
 	if (t < .0001f) return x;
 	return (1 - 3*t*t + 2*t*t*t - sqrt((t-1)*(t-1)*(t-1)*(t-1) * (1+2*t)*(1+2*t) + 4*(3-2*t)*t*t*x)) /
 		   (2*t*t*(-3+2*t));
+}
+
+float rand(vec2 seed) {
+    return fract(sin(dot(seed.xy ,vec2(12.9898,78.233))) * 43758.5453);
 }
 
 void main(void)
@@ -52,6 +58,9 @@ void main(void)
 		uv.x = 1 - expand_perpendicular_axis(t, 1 - pos.x);
 	}
 
+	// Randomize the pixel a bit
+	uv.x += 2.0f * (rand(vec2(pos.x, pos.y * seed)) - 0.5f) * .002f * entropy;
+	uv.y += 2.0f * (rand(vec2(pos.y * seed, pos.x * seed)) - 0.5f) * .002f * entropy;
 
 	// Set the pixel
 	vec4 pixel = texture2D(texture, uv);
@@ -59,70 +68,3 @@ void main(void)
 	// multiply it by the vertex color
 	gl_FragColor = gl_Color * pixel;
 }
-
-
-
-
-
-/*
-//float t = .9;
-
-// Common values
-float x2 = pos.x * pos.x;
-float a = 3 - 2 * pos.x;
-float b = 1 - x2 * a;
-
-*/
-
-//
-// Vertical transform
-//
-
-// Above
-/*if (pos.y < y0 * b) {
-	uv.y = pos.y / b;
-
-// Below
-} else if (pos.y > y0 * b + x2 * a) {
-	uv.y = (pos.y - x2 * a) / (1 - x2 * a);
-
-// Inbetween
-} else {
-	uv.y = (pos.y - x2 * a * (-y0 * scale + 0.5)) / (1 - x2 * a * (-scale + 1));
-}*/
-
-//uv.y = (pos.y - x2 * a * (-y0 * scale + 0.5)) / (1 - x2 * a * (-scale + 1));
-
-
-	
-
-//
-// Time dependence
-//
-/*
-uv.x = smoothstep(pos.x, uv.x, t);
-uv.y = smoothstep(pos.y, uv.y, t);
-*/
-
-/*
-// Top
-if (face == 0) {
-
-// Right
-} else if (face == 1) {
-	float y0 = ((float)face_pos + (float)0.5) / scale;
-	uv.y = (2*pos.y-3*t*t*pos.x*pos.x*(-3+2*pos.x)*(-1+14*y0) + 2*t*t*t*pos.x*pos.x*(-3+2*pos.x)*(-1+14*y0)) /
-		    (2-36*t*t*pos.x*pos.x*(-3+2*pos.x) + 24*t*t*t*pos.x*pos.x*(-3+2*pos.x));
-
-// Bottom
-} else if (face == 2) {
-		
-
-// Left
-} else if (face == 3) {
-	float y0 = ((float)face_pos + 0.5) / scale;
-	pos.x = 1 - pos.x
-	uv.y = (2*pos.y-3*t*t*pos.x*pos.x*(-3+2*pos.x)*(-1+14*y0) + 2*t*t*t*pos.x*pos.x*(-3+2*pos.x)*(-1+14*y0)) /
-		    (2-36*t*t*pos.x*pos.x*(-3+2*pos.x) + 24*t*t*t*pos.x*pos.x*(-3+2*pos.x));
-}
-*/

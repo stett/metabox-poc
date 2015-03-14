@@ -373,7 +373,11 @@ void game::step(float dt) {
 		float max_pos = (float)BOX_PHYSICAL_SIZE;
 		if (player_pos.x < 0 || player_pos.y < 0 || player_pos.x > max_pos || player_pos.y > max_pos) {
 
-			auto container = (player.recursions.empty() ? player.container : player.recursions.top());
+			// If the player is leaving the current top recursive meta, then set that as the container.
+			auto container = player.container;
+			if (!player.recursions.empty() && player.recursions.top()->parent == player.container) {
+				container = player.recursions.top();
+			}
 
 			//if (player.container->parent || !player.recursions.empty()) {
 			if (container->parent) {
@@ -852,6 +856,21 @@ void game::render_child(shared_ptr<Box> parent, shared_ptr<Box> child) {
 }
 
 void game::get_box_shader(shared_ptr<Box> box, sf::RenderStates& render_states) {
+
+	// Make a static clock to use for random seeding later
+	static sf::Clock clock;
+	sf::Time t = clock.getElapsedTime();
+
+	// Reset the door transition time variable and the entropy variable based on recursion depth
+	open_meta_door_shader.setParameter("t", 0);
+	float entropy = player.recursions.size();
+	if (box->recursive) {
+		//entropy += 1.0f;
+		open_meta_door_shader.setParameter("entropy", entropy);
+		open_meta_door_shader.setParameter("seed", t.asSeconds());
+	}
+
+	// Set the door transition
 	for (int face = 0; face < 4; face++) {
 		auto door = box->doors[face];
 		if (door && door->t > 0) {
@@ -865,10 +884,12 @@ void game::get_box_shader(shared_ptr<Box> box, sf::RenderStates& render_states) 
 			open_meta_door_shader.setParameter("face", face);
 			open_meta_door_shader.setParameter("face_pos", face_pos);
 
-			render_states.shader = &open_meta_door_shader;
-			return;
+			break;
 		}
 	}
+
+	// Set the shader pointer
+	render_states.shader = &open_meta_door_shader;
 }
 
 shared_ptr<Box> game::add_box(shared_ptr<Box> parent, int sx, int sy, bool recursive) {
