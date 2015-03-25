@@ -16,9 +16,18 @@ Box::Box() {
 		body_edges[i] = 0;
 	}
 
-    // Initialize blocks
+    // Initialize blocks & slots
 	for (int sx = 0; sx < BOX_SLOTS; sx++)
 	for (int sy = 0; sy < BOX_SLOTS; sy++) {
 		blocks[sx][sy] = 0;
 	}
+
+    // Initialize slots
+    for (int sx = 0; sx < BOX_SLOTS; sx++)
+    for (int sy = 0; sy < BOX_SLOTS; sy++) {
+        auto slot = &slots[sx][sy];
+        slot->parent = this;
+        slot->x = sx;
+        slot->y = sy;
+    }
 }

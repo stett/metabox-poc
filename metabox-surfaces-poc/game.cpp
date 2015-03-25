@@ -263,9 +263,12 @@ void game::step(float dt) {
                     old_slot->child = 0;
 
 				// Add to new slot
-                old_slot = slot;
+                box->slot = slot;
 				if (slot)
 					slot->child = box;
+
+                // Re-calculate box's door adjacencies
+                find_door_adjacencies(box);
 			}
 		}
 
@@ -364,19 +367,16 @@ void game::step(float dt) {
 				container = player.recursions.top();
 			}
 
-			//if (container->parent) {
+			// Calculate the new player position
+			float off = .5f * (float)BOX_PHYSICAL_SIZE / (float)BOX_SLOTS;
+			player_pos -= b2Vec2(.5f * BOX_PHYSICAL_SIZE, .5f * BOX_PHYSICAL_SIZE);
+			player_pos.x /= (float)BOX_SLOTS;
+			player_pos.y /= (float)BOX_SLOTS;
+			player_pos += container->body->GetPosition();
 
-				// Calculate the new player position
-				float off = .5f * (float)BOX_PHYSICAL_SIZE / (float)BOX_SLOTS;
-				player_pos -= b2Vec2(.5f * BOX_PHYSICAL_SIZE, .5f * BOX_PHYSICAL_SIZE);
-				player_pos.x /= (float)BOX_SLOTS;
-				player_pos.y /= (float)BOX_SLOTS;
-				player_pos += container->body->GetPosition();
-
-				// Set the new player container
-				set_player_container(container->parent, player_pos, player.body->GetLinearVelocity());
-				player_transfered = true;
-			//}
+			// Set the new player container
+			set_player_container(container->parent, player_pos, player.body->GetLinearVelocity());
+			player_transfered = true;
 		}
 
 		// If the player has wandered into a sub-meta door,
@@ -477,7 +477,7 @@ void game::find_door_adjacency(shared_ptr<BoxDoor> door) {
     // their sub-adjacencies may need updating
     if (door->slot->child) find_door_adjacency(
         door->slot->child->doors[door->face]);
-    if (adjacency->slot->child) find_door_adjacency(
+    if (adjacency && adjacency->slot->child) find_door_adjacency(
         adjacency->slot->child->doors[door->face]);
 }
 

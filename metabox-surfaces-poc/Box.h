@@ -20,7 +20,7 @@ class Box;
 class Slot {
 public:
 	int x, y;
-	shared_ptr<Box> parent;
+	Box* parent;
 	shared_ptr<Box> child;
 
     bool edges(BoxFace face) {
