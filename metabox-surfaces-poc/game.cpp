@@ -84,8 +84,19 @@ void game::setup() {
 	root_box = a;
 	set_box_door(a, Right, 5);
 	auto b = add_box(a, 2, 5, true);
-	auto c = add_box(a, 1, 4);
-	set_box_door(c, Right, 6);
+
+    auto c = add_box(a, 3, 4);
+    set_box_door(c, Left, 0);
+
+	auto d = add_box(a, 1, 4);
+	set_box_door(d, Right, 6);
+
+    auto e = add_box(c, 0, 6);
+    set_box_door(e, Left, 0);
+
+    auto f = add_box(d, 6, 6);
+    set_box_door(f, Right, 6);
+
 	for (int i = 0; i < 7; i++)
 		add_block(a, i, 6);
 
@@ -765,30 +776,44 @@ void game::render_editor() {
 
 		// Highlight doors if there are any
 		for (int i = 0; i < 4; i++) {
-			if (box->doors[i]) {
-				sf::Transform transform;
-				transform
-					.translate(box_position)
-					.scale(sf::Vector2f(box_scale, box_scale));
+            auto door = box->doors[i];
+            if (!door) continue;
 
-				sf::Vector2f pos(
-					box->doors[i]->slot->x * BOX_METERS_PER_SLOT * PIXELS_PER_METER,
-					box->doors[i]->slot->y * BOX_METERS_PER_SLOT * PIXELS_PER_METER);
+			sf::Transform transform;
+			transform
+				.translate(box_position)
+				.scale(sf::Vector2f(box_scale, box_scale));
 
-				sf::RectangleShape rect;
-				rect.setPosition(pos);
-				rect.setSize(sf::Vector2f(BOX_METERS_PER_SLOT * PIXELS_PER_METER, BOX_METERS_PER_SLOT * PIXELS_PER_METER));
+			sf::Vector2f pos(
+                door->slot->x * BOX_METERS_PER_SLOT * PIXELS_PER_METER,
+                door->slot->y * BOX_METERS_PER_SLOT * PIXELS_PER_METER);
 
-				if (box->doors[i]->open) {
-					rect.setOutlineColor(sf::Color::Blue);
-					rect.setFillColor(sf::Color(0, 0, 255, 50));
-				} else {
-					rect.setOutlineColor(sf::Color::Red);
-					rect.setFillColor(sf::Color(255, 0, 0, 50));
-				}
+			sf::RectangleShape rect;
+			rect.setPosition(pos);
+			rect.setSize(sf::Vector2f(BOX_METERS_PER_SLOT * PIXELS_PER_METER, BOX_METERS_PER_SLOT * PIXELS_PER_METER));
 
-				window->draw(rect, sf::RenderStates(transform));
+            if (door->open) {
+				rect.setOutlineColor(sf::Color::Blue);
+				rect.setFillColor(sf::Color(0, 0, 255, 50));
+			} else {
+				rect.setOutlineColor(sf::Color::Red);
+				rect.setFillColor(sf::Color(255, 0, 0, 50));
 			}
+
+			window->draw(rect, sf::RenderStates(transform));
+
+            // Draw line to adjacent door if there is one
+            if (door->adjacency) {
+                auto other_body_pos = box_positions[door->adjacency->box->id];
+
+                sf::Vertex line[2];
+                auto body_pos = box->body->GetPosition();
+                line[0].position = box_position + sf::Vector2f(pos.x * box_scale, pos.y * box_scale);
+                line[1].position = box_positions[door->adjacency->box->id] + sf::Vector2f(
+                    door->adjacency->slot->x * BOX_METERS_PER_SLOT * PIXELS_PER_METER * box_scale,
+                    door->adjacency->slot->y * BOX_METERS_PER_SLOT * PIXELS_PER_METER * box_scale);
+                window->draw(line, 2, sf::PrimitiveType::Lines);
+            }
 		}
 
 		// Child data
@@ -821,8 +846,8 @@ void game::render_editor() {
 		if (box->parent) {
 			sf::Vertex line[2];
 			auto body_pos = box->body->GetPosition();
-			line[0].position = box_position; box->parent->body->GetPosition();
-			line[1].position = box_positions[box->parent->id] + sf::Vector2f(body_pos.x * PIXELS_PER_METER * box_scale, body_pos.y * PIXELS_PER_METER * box_scale);// +half;
+			line[0].position = box_position;
+			line[1].position = box_positions[box->parent->id] + sf::Vector2f(body_pos.x * PIXELS_PER_METER * box_scale, body_pos.y * PIXELS_PER_METER * box_scale);
 			window->draw(line, 2, sf::PrimitiveType::Lines);
 		}
 
