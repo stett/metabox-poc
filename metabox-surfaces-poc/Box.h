@@ -9,7 +9,11 @@
 using namespace std;
 
 enum BoxFace { Top = 0, Right, Bottom, Left };
-enum BoxState { Gridded = 0, Fixed, Free };
+enum BoxState {
+	Gridded = 0,	// Moveable, but snaps to target grid slot
+	Fixed,			// Imoveable, fixed to grid slot
+	Free			// Free floating physics body
+};
 
 class Box;
 
@@ -17,18 +21,27 @@ class Slot {
 public:
 	int x, y;
 	shared_ptr<Box> parent;
-	list<shared_ptr<Box>> children;
-	shared_ptr<Slot> adj[4];
+	shared_ptr<Box> child;
+
+    bool edges(BoxFace face) {
+        return ((face == Left && x == 0) || (face == Right && x == BOX_SLOTS - 1) ||
+                (face == Top && y == 0) || (face == Bottom && y == BOX_SLOTS - 1));
+    }
 };
 
 class BoxDoor {
 public:
-	shared_ptr<Box> parent;
+	shared_ptr<Box> box;
+    BoxFace face;
+    Slot* slot;
 	bool open;
-	int sx;
-	int sy;
 	float t;
-	BoxDoor(shared_ptr<Box> _parent, bool _open, int _sx, int _sy) : parent(_parent), open(_open), sx(_sx), sy(_sy), t(1) {}
+
+    shared_ptr<BoxDoor> adjacency;
+    shared_ptr<BoxDoor> shingle_up;
+    shared_ptr<BoxDoor> shingle_down;
+
+	BoxDoor(shared_ptr<Box> _box, BoxFace _face, bool _open, Slot* _slot) : box(_box), face(_face), open(_open), slot(_slot), t(1) {}
 };
 
 class Box {
@@ -53,10 +66,10 @@ public:
 	int target_sx;
 	int target_sy;
 	int blocks[BOX_SLOTS][BOX_SLOTS];
-
 	bool recursive;
 
 	Box();
+	//~Box();
 };
 
 #endif
