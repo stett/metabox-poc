@@ -49,10 +49,16 @@
     <None Include="test.vert">
       <Filter>src\shaders</Filter>
     </None>
-    <None Include="open_meta_door.vert">
+    <None Include="meta_door.frag">
       <Filter>src\shaders</Filter>
     </None>
-    <None Include="open_meta_door.frag">
+    <None Include="meta_door.vert">
+      <Filter>src\shaders</Filter>
+    </None>
+    <None Include="meta_box.frag">
+      <Filter>src\shaders</Filter>
+    </None>
+    <None Include="meta_box.vert">
       <Filter>src\shaders</Filter>
     </None>
   </ItemGroup>

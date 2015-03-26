@@ -34,7 +34,8 @@ namespace game {
 	sf::Texture grid;
 	sf::Texture player_tex;
 	sf::Texture block_tex;
-	sf::Shader open_meta_door_shader;
+	sf::Shader meta_box_shader;
+    sf::Shader meta_door_shader;
 	int next_box_id;
 	float fps;
 	Player player;
@@ -87,9 +88,11 @@ void game::setup() {
 
     auto c = add_box(a, 3, 4);
     set_box_door(c, Left, 0);
+    set_box_door(c, Top, 3);
 
 	auto d = add_box(a, 1, 4);
 	set_box_door(d, Right, 6);
+    set_box_door(d, Top, 3);
 
     auto e = add_box(c, 0, 6);
     set_box_door(e, Left, 0);
@@ -113,7 +116,8 @@ void game::setup() {
 		new sf::RenderWindow(
 			sf::VideoMode(BOX_RENDER_SIZE, BOX_RENDER_SIZE),
 			"Metabox Surfaces - Proof Of Concept",
-			sf::Style::Close | sf::Style::Titlebar));
+			sf::Style::Close | sf::Style::Titlebar,
+            sf::ContextSettings::ContextSettings(0, 0, 0, 3, 0)));
 	window->setActive(true);
 
 	// Create a graphical text to display
@@ -127,7 +131,8 @@ void game::setup() {
 	block_tex.loadFromFile("graphics/block.png");
 
 	// Load the open-meta-door shader
-	open_meta_door_shader.loadFromFile("open_meta_door.vert", "open_meta_door.frag");
+	meta_box_shader.loadFromFile("meta_box.vert", "meta_box.frag");
+    meta_door_shader.loadFromFile("meta_door.vert", "meta_door.frag");
 
 	//
 	//set_mode(Edit);
@@ -911,9 +916,11 @@ void game::render_box(shared_ptr<Box> box) {
 	}
 
 	// Draw walls
-	float thickness = 2.f;
+	float thickness = 6.f;
 	for (int face = 0; face < 4; face++) {
 		sf::Sprite block_sprite(block_tex);
+
+        // Stretch out a block-texture. This is not ideal.
 		if ((BoxFace)face == Top || (BoxFace)face == Bottom) {
 			block_sprite.setScale(sf::Vector2f(
 				(float)BOX_SLOTS * (float)BOX_PIXELS_PER_SLOT / block_tex.getSize().x,
@@ -924,12 +931,35 @@ void game::render_box(shared_ptr<Box> box) {
 				(float)BOX_SLOTS * (float)BOX_PIXELS_PER_SLOT / block_tex.getSize().y));
 		}
 
+        // Shift the block texture if necessary.
 		if ((BoxFace)face == Right) {
 			block_sprite.setPosition(sf::Vector2f(BOX_SLOTS * BOX_PIXELS_PER_SLOT - thickness, 0));
 		} else if ((BoxFace)face == Bottom) {
 			block_sprite.setPosition(sf::Vector2f(0, BOX_SLOTS * BOX_PIXELS_PER_SLOT - thickness));
 		}
-		box->texture->draw(block_sprite);
+
+        // Add open/closed door shader to render states if there's a door in this wall
+        sf::RenderStates states;
+        auto door = box->doors[face];
+        if (door) {
+
+            static sf::Clock clock;
+            sf::Time t = clock.getElapsedTime();
+
+            int face_pos;
+            if (face == BoxFace::Top) face_pos = door->slot->x;
+            else if (face == BoxFace::Right) face_pos = door->slot->y;
+            else if (face == BoxFace::Bottom) face_pos = BOX_SLOTS - door->slot->x;
+            else if (face == BoxFace::Left) face_pos = BOX_SLOTS - door->slot->y;
+
+            meta_door_shader.setParameter("t", (door->adjacency ? 1.0f : door->t));
+            meta_door_shader.setParameter("face", face);
+            meta_door_shader.setParameter("face_pos", face_pos);
+            meta_door_shader.setParameter("seed", t.asSeconds());
+            states.shader = &meta_door_shader;
+        }
+
+		box->texture->draw(block_sprite, states);
 	}
 
 	// Draw all recursive children
@@ -996,11 +1026,11 @@ void game::get_box_shader(shared_ptr<Box> box, sf::RenderStates& render_states, 
 	sf::Time t = clock.getElapsedTime();
 
 	// Reset the door transition time variable and the entropy variable based on recursion depth
-	open_meta_door_shader.setParameter("t", 0);
+	meta_box_shader.setParameter("t", 0);
 	float entropy = player.recursions.size();
 	if (entropy_shader) {
-		open_meta_door_shader.setParameter("entropy", entropy);
-		open_meta_door_shader.setParameter("seed", t.asSeconds());
+		meta_box_shader.setParameter("entropy", entropy);
+		meta_box_shader.setParameter("seed", t.asSeconds());
 	}
 
 	// Set the door transition
@@ -1014,9 +1044,9 @@ void game::get_box_shader(shared_ptr<Box> box, sf::RenderStates& render_states, 
 				else if (face == BoxFace::Bottom) face_pos = BOX_SLOTS - door->slot->x;
 				else if (face == BoxFace::Left) face_pos = BOX_SLOTS - door->slot->y;
 
-				open_meta_door_shader.setParameter("t", door->t);
-				open_meta_door_shader.setParameter("face", face);
-				open_meta_door_shader.setParameter("face_pos", face_pos);
+				meta_box_shader.setParameter("t", door->t);
+				meta_box_shader.setParameter("face", face);
+				meta_box_shader.setParameter("face_pos", face_pos);
 
 				break;
 			}
@@ -1025,7 +1055,7 @@ void game::get_box_shader(shared_ptr<Box> box, sf::RenderStates& render_states, 
 
 	// Set the shader pointer
 	if (entropy_shader || door_shader)
-		render_states.shader = &open_meta_door_shader;
+		render_states.shader = &meta_box_shader;
 }
 
 shared_ptr<Box> game::add_box(shared_ptr<Box> parent, int sx, int sy, bool recursive) {

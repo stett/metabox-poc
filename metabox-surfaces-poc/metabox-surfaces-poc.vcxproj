@@ -85,8 +85,10 @@
     <ClInclude Include="View.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="open_meta_door.frag" />
-    <None Include="open_meta_door.vert" />
+    <None Include="meta_door.frag" />
+    <None Include="meta_door.vert" />
+    <None Include="meta_box.frag" />
+    <None Include="meta_box.vert" />
     <None Include="test.frag" />
     <None Include="test.vert" />
   </ItemGroup>
