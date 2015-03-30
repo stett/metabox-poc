@@ -94,11 +94,11 @@ void game::setup() {
 	set_box_door(d, Right, 6);
     set_box_door(d, Top, 3);
 
-    auto e = add_box(c, 0, 6);
+    /*auto e = add_box(c, 0, 6);
     set_box_door(e, Left, 0);
 
     auto f = add_box(d, 6, 6);
-    set_box_door(f, Right, 6);
+    set_box_door(f, Right, 6);*/
 
 	for (int i = 0; i < 7; i++)
 		add_block(a, i, 6);
@@ -378,8 +378,10 @@ void game::step(float dt) {
 		if (player_pos.x < 0 || player_pos.y < 0 || player_pos.x > max_pos || player_pos.y > max_pos) {
 
 			// If the player is leaving the current top recursive meta, then set that as the container.
+            // Otherwise, leave it as the current player.container.
 			auto container = player.container;
 			if (!player.recursions.empty() && player.recursions.top()->parent == player.container) {
+                nearest_door->t = 0;
 				container = player.recursions.top();
 			}
 
@@ -399,6 +401,7 @@ void game::step(float dt) {
 		// transfer them into the child box.
 		for (auto child : player.container->children) {
 
+            // If there is one, find the open door for this child.
 			shared_ptr<BoxDoor> door = 0;
 			for (int i = 0; i < 4; i++) {
 				if (child->doors[i] && child->doors[i]->open) {
@@ -408,17 +411,24 @@ void game::step(float dt) {
 			}
 			if (!door) continue;
 
+            // If we already found a transition, stop checking
 			if (player_transfered) break;
+
+            // Check this child for overlap.
 			for (b2Fixture* fixture = child->body->GetFixtureList(); fixture; fixture = fixture->GetNext()) {
 				if (fixture->GetType() != b2Shape::Type::e_polygon) continue;
 				if (fixture->GetShape()->TestPoint(child->body->GetTransform(), player.body->GetPosition())) {
-
 					player_pos -= child->body->GetPosition();
 					player_pos += b2Vec2(
                         door->slot->x * BOX_PHYSICAL_SIZE / BOX_SLOTS,
                         door->slot->y * BOX_PHYSICAL_SIZE / BOX_SLOTS);
 					player_pos += b2Vec2(.5f * BOX_PHYSICAL_SIZE / BOX_SLOTS, .5f * BOX_PHYSICAL_SIZE / BOX_SLOTS);
 
+                    // If we're transfering to a recursive submeta, open the superdoor
+                    if (child->recursive)
+                        child->parent->doors[door->face]->t = door->t;
+
+                    // Transfer to this child
 					set_player_container(child, player_pos, player.body->GetLinearVelocity());
 
 					break;
@@ -1318,37 +1328,13 @@ void game::set_player_container(shared_ptr<Box> box, b2Vec2 position) {
 }
 void game::set_player_container(shared_ptr<Box> box, b2Vec2 position, b2Vec2 velocity) {
 
-	// If we're not setting the container to the current container,
-	// reinstantiate the player's body
-	//if (box != player.container) {}
-
-	// If the player already has a body, delete it
-	if (player.body) {
-		player.body->GetWorld()->DestroyBody(player.body);
-	}
-
 	// If we're transfering to "no-box", set the world as the outer-world
-	auto world = (box ? (box->recursive ? box->parent->world : box->world) : outer_world);
+	//auto world = (box ? (box->recursive ? box->parent->world : box->world) : outer_world);
 
-	// Make a new body for the player in the new world
-	float size = (float)BOX_PHYSICAL_SIZE / (float)BOX_SLOTS;
-	b2BodyDef body_def;
-	body_def.type = b2BodyType::b2_dynamicBody;
-	body_def.userData = &player;
-	body_def.position = position;
-	body_def.linearVelocity = velocity;
-	player.body = world->CreateBody(&body_def);
-	player.body->SetFixedRotation(true);
+    // Generate the new player body
+    //player.generate_body(world, position, velocity);
 
-	// Create a rectangular fixture for him
-	b2PolygonShape player_shape;
-	player_shape.SetAsBox(size * .3f, size * .3f);
-	auto fixture = player.body->CreateFixture(&player_shape, 1);
-	fixture->SetFriction(FRICTION);
-	b2Filter filter;
-	filter.categoryBits = B2_CAT_MAIN;
-	filter.maskBits = B2_CAT_MAIN;
-	fixture->SetFilterData(filter);
+    
 
 	// Set the view scale based on whether we are pushing or popping
 	if (player.container) {
@@ -1382,7 +1368,8 @@ void game::set_player_container(shared_ptr<Box> box, b2Vec2 position, b2Vec2 vel
 	}
 
 	// Set the player container
-	player.container = (box ? (box->recursive ? box->parent : box) : 0);
+	//player.container = (box ? (box->recursive ? box->parent : box) : 0);
+    player.set_container(box ? (box->recursive ? box->parent : box) : 0, position, velocity);
 }
 
 void game::center_view_on_slot(int sx, int sy, bool target) {

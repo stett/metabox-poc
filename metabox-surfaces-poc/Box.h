@@ -2,6 +2,7 @@
 #define _BOX_H_
 
 #include "settings.h"
+#include "Entity.h"
 #include <Box2D/Box2D.h>
 #include <SFML/Graphics.hpp>
 #include <memory>
@@ -49,6 +50,7 @@ public:
 	int id;
 	shared_ptr<Box> parent;
 	list<shared_ptr<Box>> children;
+    list<Entity*> entities;
 	shared_ptr<sf::RenderTexture> texture;
 	shared_ptr<b2World> world;
 	sf::Texture* bg;

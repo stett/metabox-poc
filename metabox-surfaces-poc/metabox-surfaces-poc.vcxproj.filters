@@ -18,7 +18,7 @@
     <ClCompile Include="Box.cpp">
       <Filter>src</Filter>
     </ClCompile>
-    <ClCompile Include="Player.cpp">
+    <ClCompile Include="Entity.cpp">
       <Filter>src</Filter>
     </ClCompile>
   </ItemGroup>
@@ -39,6 +39,9 @@
       <Filter>src</Filter>
     </ClInclude>
     <ClInclude Include="View.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="Entity.h">
       <Filter>src</Filter>
     </ClInclude>
   </ItemGroup>
