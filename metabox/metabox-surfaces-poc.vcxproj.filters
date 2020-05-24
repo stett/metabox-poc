@@ -1,0 +1,68 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="src">
+      <UniqueIdentifier>{566f5224-c6c5-4957-9884-7670a9dac766}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\shaders">
+      <UniqueIdentifier>{30eacece-793f-4d7e-947d-57b5003b2cbb}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="main.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="game.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="Box.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="Entity.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="game.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="Box.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="settings.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="Player.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="vec2f.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="View.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="Entity.h">
+      <Filter>src</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="test.frag">
+      <Filter>src\shaders</Filter>
+    </None>
+    <None Include="test.vert">
+      <Filter>src\shaders</Filter>
+    </None>
+    <None Include="meta_door.frag">
+      <Filter>src\shaders</Filter>
+    </None>
+    <None Include="meta_door.vert">
+      <Filter>src\shaders</Filter>
+    </None>
+    <None Include="meta_box.frag">
+      <Filter>src\shaders</Filter>
+    </None>
+    <None Include="meta_box.vert">
+      <Filter>src\shaders</Filter>
+    </None>
+  </ItemGroup>
+</Project>
